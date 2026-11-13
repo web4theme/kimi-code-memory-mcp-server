@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **refine**: set a 5s busy timeout, switch the store to WAL and retry the schema setup on `SQLITE_BUSY`, so a burst of concurrent MCP instances sharing one `refined.sqlite` no longer crashes the whole stdio server with `database is locked`; if the store still cannot open, the server keeps serving its other tools and only reports the refined store as unavailable
+
 ### Added
 - **vis**: Chinese/English UI switching for dashboard ([6c29dba](https://github.com/Zehee/kimi-code-memory-mcp-server/commit/6c29dba2322d786c833acabfff6eb82d85735862))
 

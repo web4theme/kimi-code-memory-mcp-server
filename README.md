@@ -215,6 +215,7 @@ kimi-memory-setup --force
     1. 给模型补能力并打开实验开关：在 `~/.kimi-code/config.toml` 对应模型的 `capabilities` 中加入 `"dynamically_loaded_tools"`，并 `export KIMI_CODE_EXPERIMENTAL_TOOL_SELECT=1`。此后 MCP 工具经 `select_tools` 按需加载（`toolCount` 会增加 1）。
     2. 换用已声明 `dynamically_loaded_tools` 的模型（目前为 Kimi 系列）。
     3. 降级到 2.5.x，该版本会把运行时注册的 MCP 工具直接内联。
+- **`database is locked` 导致 MCP server 直接退出**：0.5.2 之前 `refined.sqlite` 没设 busy timeout，同一个 workspace（尤其是 `KIMI_MEMORY_WORKSPACE_SCOPE=global`，多个 workspace 共用一个库）并发拉起多个 MCP 实例时，初始化会抛 `SQLITE_BUSY`，而 `RefinedStore` 在模块加载期构造，异常会带走整个 stdio 进程。升级到 0.5.2+（5s busy timeout + WAL + 重试，且打开失败时只降级 `refined` 功能）。
 - 客户端连接日志见 `~/.kimi-code/logs/kimi-code.log`。
 
 ## 可选：安装用户级 AGENTS.md 启动钩子

@@ -214,6 +214,7 @@ Restart Kimi Code CLI to load the server.
     1. Declare the capability and turn the experiment on: add `"dynamically_loaded_tools"` to the model's `capabilities` in `~/.kimi-code/config.toml` and `export KIMI_CODE_EXPERIMENTAL_TOOL_SELECT=1`. MCP tools are then loaded on demand through `select_tools` (`toolCount` grows by one).
     2. Use a model that already declares `dynamically_loaded_tools` (the Kimi models at the time of writing).
     3. Downgrade to 2.5.x, which inlines runtime-registered MCP tools.
+- **`database is locked` kills the MCP server**: before 0.5.2 `refined.sqlite` had no busy timeout, so concurrent MCP instances for the same workspace (and, with `KIMI_MEMORY_WORKSPACE_SCOPE=global`, every workspace) could throw `SQLITE_BUSY` during initialization. Because `RefinedStore` is constructed at module load, that exception took down the whole stdio process. Upgrade to 0.5.2+ (5s busy timeout + WAL + retry, and a degraded refined store instead of a crash).
 - Client-side connection logs live at `~/.kimi-code/logs/kimi-code.log`.
 
 ## Optional: Install User-Level AGENTS.md Startup Hook

@@ -12,6 +12,31 @@ import { LIMITS } from './constants.js';
 import { buildLikeConditions, scoreText } from '../utils/search.js';
 import { dateRangeSql } from '../utils/date.js';
 
+/**
+ * How long SQLite waits for a competing writer before returning SQLITE_BUSY.
+ * Every MCP instance for the same workspace opens this file, and with
+ * KIMI_MEMORY_WORKSPACE_SCOPE=global every workspace shares it, so the
+ * database is routinely opened concurrently.
+ */
+const BUSY_TIMEOUT_MS = 5000;
+
+/** Delays before each open attempt; the first attempt runs immediately. */
+const OPEN_RETRY_DELAYS_MS = [0, 100, 300, 800, 1500];
+
+/** SQLITE_BUSY (5) and SQLITE_LOCKED (6) mean "another connection is using it". */
+function isBusyError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const err = error as { errcode?: number; code?: string; errstr?: string; message?: string };
+  if (err.errcode === 5 || err.errcode === 6) return true;
+  if (err.errstr === 'database is locked') return true;
+  return /database (table )?is locked/i.test(err.message ?? '');
+}
+
+function sleepSync(ms: number): void {
+  if (ms <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 export class RefinedStore {
   refinedRoot: string;
   private dbPath: string;
@@ -21,12 +46,53 @@ export class RefinedStore {
     this.refinedRoot = refinedRoot;
     this.dbPath = path.join(refinedRoot, 'refined.sqlite');
     fs.mkdirSync(refinedRoot, { recursive: true });
-    this.db = new DatabaseSync(this.dbPath);
-    this.initDb();
+    this.db = this.openWithRetry();
   }
 
-  private initDb(): void {
-    this.db.exec(`
+  /**
+   * Open the database and run the schema setup, tolerating SQLITE_BUSY.
+   *
+   * busy_timeout alone covers concurrent queries, but it does not cover the
+   * first statement on a fresh connection: `PRAGMA journal_mode=WAL` and the
+   * DDL both need a short exclusive lock, and a burst of MCP instances
+   * starting at once can exceed it. Retrying the whole open keeps a transient
+   * lock from killing the MCP process.
+   */
+  private openWithRetry(): DatabaseSync {
+    let lastError: unknown;
+    for (const delayMs of OPEN_RETRY_DELAYS_MS) {
+      sleepSync(delayMs);
+      let db: DatabaseSync | undefined;
+      try {
+        db = new DatabaseSync(this.dbPath);
+        db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+        this.enableWal(db);
+        this.initDb(db);
+        return db;
+      } catch (error) {
+        db?.close();
+        if (!isBusyError(error)) throw error;
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * WAL lets readers and writers from different processes coexist; without it
+   * a single writer blocks every other instance. Best effort: a filesystem
+   * that cannot do WAL still works in the default journal mode.
+   */
+  private enableWal(db: DatabaseSync): void {
+    try {
+      db.prepare('PRAGMA journal_mode = WAL').get();
+    } catch {
+      // Keep the current journal mode; busy_timeout and the retry still apply.
+    }
+  }
+
+  private initDb(db: DatabaseSync): void {
+    db.exec(`
       CREATE TABLE IF NOT EXISTS refined_turns (
         session_id TEXT NOT NULL,
         turn_id INTEGER NOT NULL,

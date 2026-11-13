@@ -3,6 +3,7 @@ import actionEntitiesTests from './utils/action-entities.test.js';
 import searchTests from './utils/search.test.js';
 import headingsTests from './utils/headings.test.js';
 import extractorTests from './refine/extractor.test.js';
+import storeTests from './refine/store.test.js';
 import definitionsTests from './tools/definitions.test.js';
 import catalogTests from './dao/catalog.test.js';
 
@@ -11,6 +12,7 @@ const suites: Array<{ name: string; run: () => Promise<void> }> = [
   { name: 'utils/search', run: searchTests },
   { name: 'utils/headings', run: headingsTests },
   { name: 'refine/extractor', run: extractorTests },
+  { name: 'refine/store', run: storeTests },
   { name: 'tools/definitions', run: definitionsTests },
   { name: 'dao/catalog', run: catalogTests },
 ];
