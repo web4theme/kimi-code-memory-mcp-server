@@ -206,6 +206,14 @@ Restart Kimi Code CLI to load the server.
 - **`spawn npx ENOENT` / `spawn node ENOENT`**: the client process cannot find the command (common with the native Windows binary). Point `command`/`args` in `mcp.json` at the absolute paths of Node and `dist/server.js`, or re-run `kimi-memory-setup --force`.
 - **Changes to `mcp.json` don't take effect after `/new`**: MCP servers load at session start, and a failed connection is cached by the running `kimi web` process — `/new` does not retry. Restart `kimi web` (or the CLI).
 - **MCP unavailable after switching workspaces**: versions before 0.4.1 had a vis-dashboard port race that crashed the MCP process; upgrade to 0.4.1+ and restart `kimi web`.
+- **Every MCP tool disappears in Kimi Code 2.6.x (`toolCount` contains no MCP tools)**: this is a client-side regression, not a problem in this repository.
+  - Symptom: the model reports that the memory MCP tools are unavailable in the current session; `~/.kimi-code/logs/kimi-code.log` shows the server repeatedly failing with `mcp server unavailable … closed unexpectedly`; yet starting the server manually over stdio answers `initialize` / `tools/list` in under 200ms.
+  - Root cause: 2.6.x introduced progressive tool disclosure. `toolSelect.enabled()` is true only when the model declares `dynamically_loaded_tools` and the experiment flag is on. When it is false, `capableTools(includeRuntime)` drops every MCP tool registered after the agent started (`origin: "runtime"`). The handshake still succeeds and `wire.jsonl` records `mcp.tools_discovered` with the correct tool list, but none of them reach the model.
+  - How to confirm: check `toolCount` on the `llm config` line in `~/.kimi-code/sessions/<workspace>/<session>/logs/kimi-code.log`. If it equals the built-in tool count (39, for example) and never changes after the MCP server connects, this is the issue.
+  - Workarounds (pick one):
+    1. Declare the capability and turn the experiment on: add `"dynamically_loaded_tools"` to the model's `capabilities` in `~/.kimi-code/config.toml` and `export KIMI_CODE_EXPERIMENTAL_TOOL_SELECT=1`. MCP tools are then loaded on demand through `select_tools` (`toolCount` grows by one).
+    2. Use a model that already declares `dynamically_loaded_tools` (the Kimi models at the time of writing).
+    3. Downgrade to 2.5.x, which inlines runtime-registered MCP tools.
 - Client-side connection logs live at `~/.kimi-code/logs/kimi-code.log`.
 
 ## Optional: Install User-Level AGENTS.md Startup Hook

@@ -207,6 +207,14 @@ kimi-memory-setup --force
 - **`spawn npx ENOENT` / `spawn node ENOENT`**：客户端进程找不到命令（常见于原生 Windows 二进制）。把 `mcp.json` 里的 `command`/`args` 改为 Node 与 `dist/server.js` 的绝对路径，或运行 `kimi-memory-setup --force` 重新生成。
 - **改了 `mcp.json` 但 `/new` 后仍不生效**：MCP server 在会话启动时加载，且连接失败会被当前 `kimi web` 进程缓存，`/new` 不会重试——需要重启 `kimi web`（或 CLI）。
 - **切换工作区后 MCP 不可用**：0.4.1 之前版本存在 vis dashboard 端口竞态，会拖垮 MCP 进程；升级到 0.4.1+ 并重启 `kimi web`。
+- **Kimi Code 2.6.x 中 MCP 工具整体消失（`toolCount` 不包含任何 MCP 工具）**：这是客户端的回归，不是本仓库的问题。
+  - 现象：会话里模型说「记忆 MCP 工具在当前会话不可用」；`~/.kimi-code/logs/kimi-code.log` 里该 server 反复出现 `mcp server unavailable … closed unexpectedly`；但手动以 stdio 启动服务端时 `initialize` / `tools/list` 都在 200ms 内正常返回。
+  - 根因：2.6.x 引入渐进式工具披露后，`toolSelect.enabled()` 仅在模型具备 `dynamically_loaded_tools` 且实验开关打开时为真；为假时 `capableTools(includeRuntime)` 会丢弃所有 agent 启动后才注册的 MCP 工具（`origin: "runtime"`）。因此握手成功、`wire.jsonl` 里也有 `mcp.tools_discovered`（工具数量正确），但请求里一个都不带。
+  - 判定方法：查看会话日志 `~/.kimi-code/sessions/<workspace>/<session>/logs/kimi-code.log` 中 `llm config` 的 `toolCount`。若它恰好等于内置工具数（例如 39）、且 MCP 连接后也不变化，即命中该问题。
+  - 临时方案（任选其一）：
+    1. 给模型补能力并打开实验开关：在 `~/.kimi-code/config.toml` 对应模型的 `capabilities` 中加入 `"dynamically_loaded_tools"`，并 `export KIMI_CODE_EXPERIMENTAL_TOOL_SELECT=1`。此后 MCP 工具经 `select_tools` 按需加载（`toolCount` 会增加 1）。
+    2. 换用已声明 `dynamically_loaded_tools` 的模型（目前为 Kimi 系列）。
+    3. 降级到 2.5.x，该版本会把运行时注册的 MCP 工具直接内联。
 - 客户端连接日志见 `~/.kimi-code/logs/kimi-code.log`。
 
 ## 可选：安装用户级 AGENTS.md 启动钩子

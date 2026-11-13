@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **readme**: centered header with banner, quickstart and demo section ([33c2a4d](https://github.com/Zehee/kimi-code-memory-mcp-server/commit/33c2a4d36cb075866b7a8d43a68588fc29968e2f))
+- **docs**: document the Kimi Code 2.6.x regression that drops MCP tools registered after agent startup (`origin: "runtime"`), including how to confirm it from `toolCount` and three workarounds (README / README.en)
 
 ## [0.5.0] - 2026-09-15
 
